@@ -103,16 +103,13 @@ def evaluate(args):
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
         for batch in tqdm(test_loader, desc="Evaluating"):
-            clips = batch["clip"].to(device)  # (B, T, 3, H, W)
-            masks = batch["mask"].to(device)  # (B, T, 1, H, W)
+            clips = batch["clip"].to(device)
+            masks = batch["mask"].to(device)
             video_ids = batch["video_id"]
             frame_indices = batch["frame_indices"]
 
             if isinstance(video_ids, str):
                 video_ids = [video_ids]
-            if isinstance(frame_indices, (tuple, list)):
-                if len(frame_indices) > 0 and not isinstance(frame_indices[0], (tuple, list)):
-                    frame_indices = [frame_indices]
             if torch.is_tensor(frame_indices):
                 frame_indices = [tuple(idx.tolist()) for idx in frame_indices]
 
@@ -168,7 +165,7 @@ def evaluate(args):
 
     for vid in video_lengths.keys():
         counts = frame_score_counts[vid]
-        counts[counts == 0] = 1  # avoid divide by zero
+        counts[counts == 0] = 1
         avg_scores = frame_score_sums[vid] / counts
         all_frame_scores.extend(avg_scores.tolist())
         all_frame_labels.extend(frame_labels[vid].tolist())

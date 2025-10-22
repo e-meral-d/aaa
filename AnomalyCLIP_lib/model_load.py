@@ -1,5 +1,6 @@
 import hashlib
 import os
+from pathlib import Path
 import urllib
 import warnings
 from typing import Union, List
@@ -25,6 +26,10 @@ _tokenizer = _Tokenizer()
 
 _MODELS = {
     "ViT-L/14@336px": "https://openaipublic.azureedge.net/clip/models/3035c92b350959924f9f00213499208652fc7ea050643e8b385c2dac08641f02/ViT-L-14-336px.pt",
+}
+
+_LOCAL_MODEL_PATHS = {
+    "ViT-L/14@336px": Path(__file__).resolve().parent.parent / "ViT-L-14-336px.pt",
 }
 
 
@@ -141,8 +146,11 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
     """
     print("name", name)
     if name in _MODELS:
-        # model_path = _download(_MODELS[name], download_root or os.path.expanduser("~/.cache/clip"))
-        model_path = _download(_MODELS[name], download_root or os.path.expanduser("/remote-home/iot_zhouqihang/root/.cache/clip"))
+        local_override = _LOCAL_MODEL_PATHS.get(name)
+        if local_override is not None and local_override.exists():
+            model_path = str(local_override)
+        else:
+            model_path = _download(_MODELS[name], download_root or os.path.expanduser("/remote-home/iot_zhouqihang/root/.cache/clip"))
     elif os.path.isfile(name):
         model_path = name
     else:

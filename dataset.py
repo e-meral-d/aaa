@@ -11,6 +11,7 @@ import os
 import cv2
 from AnomalyCLIP_lib.constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD
 
+
 def generate_class_info(dataset_name):
     class_name_map_class_id = {}
     if dataset_name == 'mvtec':
@@ -24,11 +25,12 @@ def generate_class_info(dataset_name):
     elif dataset_name == 'btad':
         obj_list = ['01', '02', '03']
     elif dataset_name == 'DAGM_KaggleUpload':
-        obj_list = ['Class1','Class2','Class3','Class4','Class5','Class6','Class7','Class8','Class9','Class10']
+        obj_list = ['Class1', 'Class2', 'Class3', 'Class4', 'Class5', 'Class6', 'Class7', 'Class8', 'Class9', 'Class10']
     elif dataset_name == 'SDD':
         obj_list = ['electrical commutators']
     elif dataset_name == 'DTD':
-        obj_list = ['Woven_001', 'Woven_127', 'Woven_104', 'Stratified_154', 'Blotchy_099', 'Woven_068', 'Woven_125', 'Marbled_078', 'Perforated_037', 'Mesh_114', 'Fibrous_183', 'Matted_069']
+        obj_list = ['Woven_001', 'Woven_127', 'Woven_104', 'Stratified_154', 'Blotchy_099', 'Woven_068', 'Woven_125',
+                    'Marbled_078', 'Perforated_037', 'Mesh_114', 'Fibrous_183', 'Matted_069']
     elif dataset_name == 'colon':
         obj_list = ['colon']
     elif dataset_name == 'ISBI':
@@ -42,6 +44,7 @@ def generate_class_info(dataset_name):
 
     return obj_list, class_name_map_class_id
 
+
 class Dataset(data.Dataset):
     def __init__(self, root, transform, target_transform, dataset_name, mode='test'):
         self.root = root
@@ -49,7 +52,6 @@ class Dataset(data.Dataset):
         self.target_transform = target_transform
         self.data_all = []
         meta_info = json.load(open(f'{self.root}/meta.json', 'r'))
-        name = self.root.split('/')[-1]
         meta_info = meta_info[mode]
 
         self.cls_names = list(meta_info.keys())
@@ -58,30 +60,29 @@ class Dataset(data.Dataset):
         self.length = len(self.data_all)
 
         self.obj_list, self.class_name_map_class_id = generate_class_info(dataset_name)
+
     def __len__(self):
         return self.length
 
     def __getitem__(self, index):
         data = self.data_all[index]
         img_path, mask_path, cls_name, specie_name, anomaly = data['img_path'], data['mask_path'], data['cls_name'], \
-                                                              data['specie_name'], data['anomaly']
+            data['specie_name'], data['anomaly']
         img = Image.open(os.path.join(self.root, img_path))
         if anomaly == 0:
             img_mask = Image.fromarray(np.zeros((img.size[0], img.size[1])), mode='L')
         else:
             if os.path.isdir(os.path.join(self.root, mask_path)):
-                # just for classification not report error
                 img_mask = Image.fromarray(np.zeros((img.size[0], img.size[1])), mode='L')
             else:
                 img_mask = np.array(Image.open(os.path.join(self.root, mask_path)).convert('L')) > 0
                 img_mask = Image.fromarray(img_mask.astype(np.uint8) * 255, mode='L')
-        # transforms
         img = self.transform(img) if self.transform is not None else img
         img_mask = self.target_transform(
             img_mask) if self.target_transform is not None and img_mask is not None else img_mask
         img_mask = [] if img_mask is None else img_mask
         return {'img': img, 'img_mask': img_mask, 'cls_name': cls_name, 'anomaly': anomaly,
-                'img_path': os.path.join(self.root, img_path), "cls_id": self.class_name_map_class_id[cls_name]}    
+                'img_path': os.path.join(self.root, img_path), "cls_id": self.class_name_map_class_id[cls_name]}
 
 
 class _DefaultVideoFrameTransform:
@@ -158,14 +159,14 @@ def _shanghaitech_video_index(root: Path) -> List[Dict]:
             continue
         mask_path = mask_root / f"{sequence_dir.name}.npy"
         entries.append(
-            {
-                "dataset": "ShanghaiTech",
-                "video_id": sequence_dir.name,
-                "frame_paths": frame_paths,
-                "mask_npy": mask_path if mask_path.exists() else None,
-                "mask_type": "npy" if mask_path.exists() else "zeros",
-            }
-        )
+                {
+                    "dataset": "ShanghaiTech",
+                    "video_id": sequence_dir.name,
+                    "frame_paths": frame_paths,
+                    "mask_npy": mask_path if mask_path.exists() else None,
+                    "mask_type": "npy" if mask_path.exists() else "zeros",
+                }
+            )
     return entries
 
 
@@ -195,11 +196,11 @@ class VideoAnomalyDataset(data.Dataset):
         self.dataset_name = dataset_name
         self.root = root
         if transform is None or target_transform is None:
-            default_frame, default_mask = default_video_transforms(image_size)
+            frame_transform, mask_transform = default_video_transforms(image_size)
             if transform is None:
-                transform = default_frame
+                transform = frame_transform
             if target_transform is None:
-                target_transform = default_mask
+                target_transform = mask_transform
         self.transform = transform
         self.target_transform = target_transform
         self.clip_length = clip_length
@@ -260,11 +261,7 @@ class VideoAnomalyDataset(data.Dataset):
                 raise RuntimeError(f"Failed to read frame {frame_path}")
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
             pil_img = Image.fromarray(img_rgb)
-            if self.transform is not None:
-                frame_tensor = self.transform(pil_img)
-            else:
-                arr = img_rgb.astype(np.float32) / 255.0
-                frame_tensor = torch.from_numpy(arr).permute(2, 0, 1)
+            frame_tensor = self.transform(pil_img) if self.transform is not None else torch.from_numpy(img_rgb.astype(np.float32) / 255.0).permute(2, 0, 1)
             frames.append(frame_tensor)
         return torch.stack(frames, dim=0)
 
@@ -330,9 +327,7 @@ class VideoAnomalyDataset(data.Dataset):
 
         if mask_tensor.dim() == 3:
             mask_tensor = mask_tensor.unsqueeze(1)
-        if mask_tensor.dim() == 4 and (
-            mask_tensor.shape[-2] != frames_tensor.shape[-2] or mask_tensor.shape[-1] != frames_tensor.shape[-1]
-        ):
+        if mask_tensor.shape[-2] != frames_tensor.shape[-2] or mask_tensor.shape[-1] != frames_tensor.shape[-1]:
             mask_tensor = torch.nn.functional.interpolate(
                 mask_tensor.float(),
                 size=(frames_tensor.shape[-2], frames_tensor.shape[-1]),

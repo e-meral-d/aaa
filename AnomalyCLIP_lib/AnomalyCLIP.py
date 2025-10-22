@@ -124,7 +124,6 @@ class TemporalAdapterBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # x: (batch, seq_len, embed_dim) with seq_len = temporal length
         residual = x
         x_norm = self.ln1(x)
         attn_out, _ = self.attn(x_norm, x_norm, x_norm, need_weights=False)
@@ -154,14 +153,11 @@ class TemporalAdapter(nn.Module):
         )
 
     def forward(self, tokens: torch.Tensor, batch_size: int, num_frames: int) -> torch.Tensor:
-        """
-        Args:
-            tokens: shape (batch_total, seq_len, embed_dim)
-        """
         if num_frames <= 1:
             return tokens
         batch_total, seq_len, embed_dim = tokens.shape
-        assert batch_total == batch_size * num_frames, "TemporalAdapter: mismatched batch/temporal dimensions"
+        if batch_total != batch_size * num_frames:
+            raise ValueError("TemporalAdapter: mismatched batch/temporal dimensions")
 
         tokens = tokens.view(batch_size, num_frames, seq_len, embed_dim)
         tokens = tokens.permute(0, 2, 1, 3).contiguous().view(batch_size * seq_len, num_frames, embed_dim)
@@ -428,7 +424,6 @@ class VisionTransformer(nn.Module):
             return tokens
         return self.temporal_adapter(tokens, batch_size, num_frames)
 
-
     @torch.no_grad()
     def DAPM_replace(self, DPAM_layer):
         if DPAM_layer is not None:
@@ -570,7 +565,7 @@ class AnomalyCLIP(nn.Module):
     def dtype(self):
         return self.visual.conv1.weight.dtype
 
-    def encode_image(self, image, feature_list = [], ori_patch = False, proj_use = True, DPAM_layer = None, ffn = False, temporal_adapter = None):
+    def encode_image(self, image, feature_list = [], ori_patch = False, proj_use = True, DPAM_layer = None, ffn = False, temporal_adapter=None):
         return self.visual(image.type(self.dtype), feature_list, ori_patch = ori_patch, proj_use = proj_use, DPAM_layer = DPAM_layer, ffn = ffn, temporal_adapter=temporal_adapter)
 
 
